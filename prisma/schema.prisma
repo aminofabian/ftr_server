@@ -1,0 +1,283 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum InvitationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
+model User {
+  id                    String        @id @default(cuid())
+  email                 String        @unique
+  name                  String?
+  password              String
+  dateOfBirth           DateTime?
+  gender                String?
+  location              String?
+  profilePicture        String?
+  verificationDocuments String?
+  points                Int           @default(0)
+  totalDonations        Float         @default(0)
+  totalRequestsHelped   Int           @default(0)
+  isReceiver            Boolean       @default(false)
+  isAnonymous           Boolean       @default(false)
+  isInvited             Boolean?      @default(false)
+  InvitationStatus      InvitationStatus? @default(PENDING)
+  invitedBy             User?         @relation("InvitedBy", fields: [invitedByUserID], references: [id])
+  invitedByUserID       String?
+  invitedUsers          User[]        @relation("InvitedBy")
+  badges                Badge[]       @relation("UserBadges")
+  communities           Community[]   @relation("CommunityMembers")
+  requests              Request[]
+  donations             Donation[]    @relation("Donator")
+  giverTransactions     Transaction[] @relation("GiverRelation")
+  receiverTransactions  Transaction[] @relation("ReceiverRelation")
+  wallet                Wallet[]
+  createdCommunities    Community[]   @relation("CreatedBy")
+  subscriptions         Subscription[]
+  sessions              Session[]
+
+  votes Vote[] @relation("Votes")
+
+  invitesSent Invite[] @relation("SentInvites")
+
+  likes        Like[]        @relation("LikedBy")
+  comments     Comment[]     @relation("UserComments")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime?      @updatedAt
+  commentVotes CommentVote[] @relation("CommentVotes")
+
+  image        String?
+  accounts     Account[]     @relation("UserAccounts")
+
+
+  @@map("users")
+}
+
+model Account {
+  id        String   @id @default(cuid())
+  user      User     @relation("UserAccounts", fields: [userId], references: [id])
+  userId    String
+  provider  String
+  providerId String
+  accessToken String
+  refreshToken String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("accounts")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  session   String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("sessions")
+}
+
+model Donation {
+  id        String   @id @default(cuid())
+  user      User     @relation("Donator", fields: [userId], references: [id])
+  userId    String
+  request   Request  @relation(fields: [requestId], references: [id])
+  requestId String
+  amount    Float
+  createdAt DateTime @default(now())
+
+  @@map("donations")
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  balance   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("wallets")
+}
+
+model Community {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+
+  creator   User?   @relation("CreatedBy", references: [id], fields: [creatorId])
+  creatorId String?
+
+  members             User[]    @relation("CommunityMembers")
+  creationTimestamp   DateTime  @default(now())
+  lastUpdateTimestamp DateTime  @updatedAt
+  requests            Request[]
+  userId              String?
+
+  subscriptions Subscription[]
+
+  @@map("communities")
+}
+
+model Subscription {
+  user         User     @relation(fields: [userId], references: [id])
+  userId          String
+  community    Community @relation(fields: [communityId], references: [id])
+  communityId  String
+
+
+  @@id([userId, communityId])
+}
+
+enum Status {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELED
+}
+
+
+model Request {
+  id           String     @id @default(cuid())
+  author       User       @relation(fields: [authorId], references: [id])
+  authorId     String
+  donations    Donation[]
+  community    Community  @relation(fields: [communityId], references: [id])
+  communityId  String
+  typeOfHelp   String
+  content      Json?
+  location     String
+  monetaryGoal Float?
+  deadline     DateTime?
+  status       Status     @default(PENDING)
+  progress     Float      @default(0)
+  comments     Comment[]
+  likes        Like[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  votes        Vote[]
+
+  @@map("requests")
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  giver      User     @relation(name: "GiverRelation", fields: [giverId], references: [id])
+  giverId    String
+  receiver   User     @relation(name: "ReceiverRelation", fields: [receiverId], references: [id])
+  receiverId String
+  amount     Float
+  timestamp  DateTime @default(now())
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  author    User?    @relation("UserComments", fields: [authorId], references: [id])
+  authorId  String
+  request   Request  @relation(fields: [requestId], references: [id])
+  requestId String
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  replyToId String?
+  replyTo   Comment?  @relation("replyTo", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   Comment[] @relation("replyTo")
+
+  votes     CommentVote[]
+  commentId String?
+
+  @@map("comments")
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+model CommentVote {
+  user      User     @relation("CommentVotes", fields: [userId], references: [id])
+  userId    String
+  comment   Comment  @relation(fields: [commentId], references: [id])
+  commentId String
+  vote      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  type      VoteType
+
+  @@id([userId, commentId])
+  @@map("commentVotes")
+}
+
+model Vote {
+  user      User     @relation("Votes", fields: [userId], references: [id])
+  userId    String
+  request   Request  @relation(fields: [requestId], references: [id])
+  requestId String
+  type      VoteType
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, requestId])
+  @@map("votes")
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  user      User     @relation("LikedBy", fields: [userID], references: [id])
+  userID    String
+  request   Request  @relation(fields: [requestID], references: [id]) // Define the opposite relation field here
+  requestID String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("likes")
+}
+
+model Badge {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  users       User[]   @relation("UserBadges")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("badges")
+}
+
+model Level {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  unlockedBy  Int // Points required to unlock this level
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("levels")
+}
+
+model Invite {
+  id           String   @id @default(cuid())
+  inviter      User     @relation("SentInvites", fields: [inviterId], references: [id])
+  inviterId    String
+  inviteeEmail String // Email of the user invited
+  status       String // Status of the invite (e.g., pending, accepted, declined)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("invites")
+}
